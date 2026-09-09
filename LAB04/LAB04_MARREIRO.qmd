@@ -1,0 +1,95 @@
+---
+title: "LAB04_marreiro.qmd"
+author: "Fernanda Marreiro"
+format: pdf
+editor: visual
+---
+
+# **Laboratório 4: Importação de Dados Retangulares - Excel**
+
+```{r}
+# Q1. Carregue os pacotes readxl e tidyverse.
+library(readxl)
+library(tidyverse)
+library(dplyr)
+```
+
+```{r}
+# Q2. Crie uma variável chamada fname que contenha o caminho para o arquivo WDIEXCEL.xlsx
+fname <- "/Users/fernandamarreiro/Desktop/WDIEXCEL.xlsx"
+file.exists(fname)
+```
+
+```{r}
+# Q3. Ler a planilha "Country"
+countries <- read_excel(fname, sheet = "Country")
+```
+
+```{r}
+# Q4. Filtrar Brasil e mais 4 países de sua escolha
+paises_selecionados <- c("BRA", "ARG", "CHL", "COL", "URY")
+
+countries <- countries %>%
+  filter(`Country Code` %in% paises_selecionados)
+```
+
+```{r}
+# Q5. Ler a planilha "Data"
+WDI <- read_excel(fname, sheet = "Data")
+```
+
+```{r}
+# Q6. Selecionar Country Code, Indicator Code e anos de 1960 a 2018
+WDI <- WDI %>%
+  select(`Country Code`, `Indicator Code`, `1960`:`2018`)
+```
+
+```{r}
+# Q7. Pivotar a tabela para o formato Tidy (coluna YEAR)
+WDI <- WDI %>%
+  pivot_longer(
+    cols = `1960`:`2018`,
+    names_to = "YEAR",
+    values_to = "Value"
+  )
+```
+
+```{r}
+# Q8. Converter a coluna YEAR para inteiro
+WDI <- WDI %>%
+  mutate(YEAR = as.integer(YEAR))
+```
+
+```{r}
+# Q9. Filtrar os países selecionados, buscar o nome (Short Name) e o indicador
+WDI <- WDI %>%
+  semi_join(countries, by = "Country Code") %>%
+  left_join(countries %>% select(`Country Code`, `Short Name`), by = "Country Code") %>%
+  filter(`Indicator Code` == "SP.DYN.CBRT.IN") %>%
+  rename(SP.DYN.CBRT.IN = Value) %>%
+  select(`Country Code`, `Short Name`, YEAR, SP.DYN.CBRT.IN)
+```
+
+```{r}
+# Q10. Ordenar por país e ano
+WDI <- WDI %>%
+  arrange(`Country Code`, YEAR)
+```
+
+```{r}
+# Q11. Gerar o gráfico de linhas com ggplot2
+ggplot(WDI, aes(x = YEAR, y = SP.DYN.CBRT.IN, color = `Short Name`)) +
+  geom_line(size = 1) +
+  labs(
+    title = "Taxa Bruta de Natalidade (1960 - 2018)",
+    x = "Ano",
+    y = "Taxa de Natalidade (por 1.000 pessoas)",
+    color = "País"
+  ) +
+  theme_minimal()
+```
+
+```{r}
+Sys.setenv(TZ = "America/Sao_Paulo")
+Sys.time()
+```
