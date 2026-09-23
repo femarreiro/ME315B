@@ -1,0 +1,141 @@
+---
+title: "x"
+format: typst
+editor: visual
+---
+
+## Lab07 : SQLite
+
+1.  Baixe o arquivo `uwmadison.sqlite3`. Conecte-se a ele usando o pacote `RSQLite`, armazenando a conexão em uma variável `conn`.
+
+```{r}
+library(DBI)
+library(RSQLite)
+#Conexao com SQL
+con <-dbConnect(SQLite(), "database.sqlite3")
+
+# Opcional: explorar as tabelas do banco de dados
+dbListTables(con)
+```
+
+2.  Quem são e quantos são os professores que lecionaram disciplinas cujo tópico era estatística (`subjects.abbreviation='STAT'`);
+
+```{r}
+sql_q1 <- "
+  SELECT DISTINCT 
+    i.id, 
+    i.name
+  FROM instructors i
+  JOIN teachings t ON i.id = t.instructor_id
+  JOIN sections sec ON t.section_uuid = sec.uuid
+  JOIN subject_memberships sm ON sec.course_offering_uuid = sm.course_offering_uuid
+  JOIN subjects s ON sm.subject_code = s.code
+  WHERE s.abbreviation = 'STAT'
+  ORDER BY i.name;
+"
+
+professores_stat <- dbGetQuery(con, sql_q1)
+
+# Quantidade total e lista
+cat("Quantidade de professores de Estatística:", nrow(professores_stat), "\n\n")
+print(professores_stat)
+```
+
+3.  Cálculo das médias de GPA e identificação dos extremos
+
+```{r}
+# 1. GPA DOS PROFESSORES DE ESTATÍSTICA
+sql_gpa_professores <- "
+  SELECT 
+    i.name AS professor,
+    ROUND(
+      SUM(
+        gd.a_count * 4.0 + 
+        gd.ab_count * 3.5 + 
+        gd.b_count * 3.0 + 
+        gd.bc_count * 2.5 + 
+        gd.c_count * 2.0 + 
+        gd.d_count * 1.0
+      ) / NULLIF(SUM(
+        gd.a_count + gd.ab_count + gd.b_count + 
+        gd.bc_count + gd.c_count + gd.d_count + gd.f_count
+      ), 0), 4
+    ) AS media_gpa
+  FROM instructors i
+  JOIN teachings t ON i.id = t.instructor_id
+  JOIN sections sec ON t.section_uuid = sec.uuid
+  JOIN grade_distributions gd ON sec.course_offering_uuid = gd.course_offering_uuid 
+                             AND sec.number = gd.section_number
+  JOIN subject_memberships sm ON sec.course_offering_uuid = sm.course_offering_uuid
+  JOIN subjects s ON sm.subject_code = s.code
+  WHERE s.abbreviation = 'STAT'
+  GROUP BY i.id, i.name
+  HAVING SUM(gd.a_count + gd.ab_count + gd.b_count + gd.bc_count + gd.c_count + gd.d_count + gd.f_count) > 0
+  ORDER BY media_gpa ASC;
+"
+
+gpa_professores <- dbGetQuery(con, sql_gpa_professores)
+
+prof_mais_dificil <- head(gpa_professores, 1)
+prof_mais_facil   <- tail(gpa_professores, 1)
+
+
+# 2. GPA DAS DISCIPLINAS DE ESTATÍSTICA
+
+sql_gpa_disciplinas <- "
+  SELECT 
+    c.number AS codigo,
+    c.name AS nome,
+    ROUND(
+      SUM(
+        gd.a_count * 4.0 + 
+        gd.ab_count * 3.5 + 
+        gd.b_count * 3.0 + 
+        gd.bc_count * 2.5 + 
+        gd.c_count * 2.0 + 
+        gd.d_count * 1.0
+      ) / NULLIF(SUM(
+        gd.a_count + gd.ab_count + gd.b_count + 
+        gd.bc_count + gd.c_count + gd.d_count + gd.f_count
+      ), 0), 4
+    ) AS media_gpa
+  FROM courses c
+  JOIN course_offerings co ON c.uuid = co.course_uuid
+  JOIN grade_distributions gd ON co.uuid = gd.course_offering_uuid
+  JOIN subject_memberships sm ON co.uuid = sm.course_offering_uuid
+  JOIN subjects s ON sm.subject_code = s.code
+  WHERE s.abbreviation = 'STAT'
+  GROUP BY c.uuid, c.number, c.name
+  HAVING SUM(gd.a_count + gd.ab_count + gd.b_count + gd.bc_count + gd.c_count + gd.d_count + gd.f_count) > 0
+  ORDER BY media_gpa ASC;
+"
+
+gpa_disciplinas <- dbGetQuery(con, sql_gpa_disciplinas)
+
+disc_mais_dificil <- head(gpa_disciplinas, 1)
+disc_mais_facil   <- tail(gpa_disciplinas, 1)
+
+#Respostas
+cat("1. Quem é o professor mais difícil?\n")
+cat("   Resposta:", prof_mais_dificil$professor, "(GPA médio:", prof_mais_dificil$media_gpa, ")\n\n")
+
+cat("2. Quem é o professor mais fácil?\n")
+cat("   Resposta:", prof_mais_facil$professor, "(GPA médio:", prof_mais_facil$media_gpa, ")\n\n")
+
+cat("3. Qual é a disciplina mais difícil?\n")
+cat("   Resposta: STAT", disc_mais_dificil$codigo, "-", disc_mais_dificil$nome, "(GPA médio:", disc_mais_dificil$media_gpa, ")\n\n")
+
+cat("4. Qual é a disciplina mais fácil?\n")
+cat("   Resposta: STAT", disc_mais_facil$codigo, "-", disc_mais_facil$nome, "(GPA médio:", disc_mais_facil$media_gpa, ")\n")
+```
+
+4.  Desconectar o banco de dados
+
+```{r}
+dbDisconnect(con)
+```
+
+```{r}
+Sys.setenv(TZ = "America/Sao_Paulo")
+Sys.time()
+```
